@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { copyFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync } from 'node:fs'
+import { PAGES } from './src/data/heroes.js'
 import { resolve } from 'node:path'
 
 // GitHub Pages has no SPA rewrites: serving the app as 404.html makes deep links (/skills, /contact) work.
@@ -14,7 +15,15 @@ const spaFallback = () => {
     },
     closeBundle() {
       try {
-        copyFileSync(resolve(outDir, 'index.html'), resolve(outDir, '404.html'))
+        const index = resolve(outDir, 'index.html')
+        copyFileSync(index, resolve(outDir, '404.html'))
+        // a real index.html per route so deep links (/skills) answer 200 for browsers and link-preview crawlers
+        for (const p of PAGES) {
+          if (p.path === '/') continue
+          const dir = resolve(outDir, p.path.replace(/^\//, ''))
+          mkdirSync(dir, { recursive: true })
+          copyFileSync(index, resolve(dir, 'index.html'))
+        }
       } catch {
         /* outDir without index.html (e.g. lib builds) */
       }
