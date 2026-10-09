@@ -1,0 +1,10 @@
+node_modules
+dist
+npm-install.log
+.DS_Store
+*.log
+.claude/
+dist-check-*
+shots/
+dist-*/
+private-assets/

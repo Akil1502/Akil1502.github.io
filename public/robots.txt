@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://akil1502.github.io/sitemap.xml
