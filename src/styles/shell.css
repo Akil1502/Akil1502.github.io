@@ -283,7 +283,8 @@ body {
 }
 .hs-hero {
   font-family: var(--h-font);
-  font-size: 1.9rem;
+  font-size: min(1.9rem, calc(14.5rem / var(--hs-len, 8)));
+  white-space: nowrap;
   line-height: 1;
   text-transform: uppercase;
   color: var(--fg);
@@ -379,7 +380,9 @@ body {
 }
 .tr-name {
   font-family: var(--tr-font);
-  font-size: clamp(3rem, 11vw, 9.5rem);
+  /* long section names (CERTIFICATIONS) shrink to fit the viewport */
+  font-size: min(clamp(3rem, 11vw, 9.5rem), calc(118vw / var(--tr-len, 8)));
+  white-space: nowrap;
   line-height: 0.95;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -477,7 +480,9 @@ body {
 }
 .np-hero {
   font-family: var(--np-font);
-  font-size: clamp(2.8rem, 8vw, 7rem);
+  /* section names vary from HOME to CERTIFICATIONS: shrink long ones to fit beside the emblem */
+  font-size: min(clamp(2.8rem, 8vw, 7rem), calc(min(100vw, 1100px) * 0.72 / var(--np-len, 8)));
+  white-space: nowrap;
   line-height: 0.9;
   text-transform: uppercase;
   color: var(--fg);

@@ -7,7 +7,7 @@ import { PAGES } from '../data/heroes'
 const STRIPS = 9
 
 // Studio-style flip transition. cover(): strips flip shut (staggered from the centre) in the destination hero's
-// colours, the hero name slams in with a light sweep and the emblem punches out with a shockwave ring.
+// colours, the section name slams in with a light sweep and the emblem punches out with a shockwave ring.
 // reveal(): name crushes, strips flip open the other way.
 export default function TransitionOverlay() {
   const root = useRef(null)
@@ -28,8 +28,11 @@ export default function TransitionOverlay() {
       el.style.setProperty('--tr-c', page.theme.accent)
       el.style.setProperty('--tr-d', page.theme.accent2)
       el.style.setProperty('--tr-font', page.theme.heroFont)
-      name.current.textContent = page.hero.toUpperCase()
-      label.current.textContent = `${String(PAGES.indexOf(page) + 1).padStart(2, '0')} / ${String(PAGES.length).padStart(2, '0')} — ${page.label.toUpperCase()}`
+      // the section's own name is the title card (HOME, ABOUT, … PROJECTS); the hero lives on in colours + emblem
+      const title = page.label.toUpperCase()
+      name.current.textContent = title
+      el.style.setProperty('--tr-len', String(Math.max(4, title.length)))
+      label.current.textContent = `SECTION ${String(PAGES.indexOf(page) + 1).padStart(2, '0')} / ${String(PAGES.length).padStart(2, '0')}`
       emblemWrap.current.dataset.emblem = page.emblem
       emblemWrap.current.querySelectorAll('.tr-emblem').forEach((n) => (n.style.display = n.dataset.id === page.emblem ? 'block' : 'none'))
     }
@@ -101,7 +104,7 @@ export default function TransitionOverlay() {
         </div>
         <div className="tr-name-wrap">
           <h2 ref={name} className="tr-name">
-            HERO
+            HOME
           </h2>
           <span ref={sweep} className="tr-sweep" />
         </div>

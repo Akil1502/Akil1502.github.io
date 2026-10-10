@@ -93,7 +93,7 @@ export default function Nav({ ready, page }) {
               <span>Engage ↗</span>
             </a>
           </Magnetic>
-          <button className={`nav-burger ${open ? 'is-open' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="Hero select menu" aria-expanded={open}>
+          <button className={`nav-burger ${open ? 'is-open' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="Sections menu" aria-expanded={open}>
             <span />
             <span />
           </button>
@@ -102,7 +102,7 @@ export default function Nav({ ready, page }) {
 
       <div ref={menu} className={`hero-select ${open ? 'is-open' : ''}`} aria-hidden={!open} role="dialog" aria-label="Choose a page">
         <div className="hs-inner">
-          <p className="hs-kicker mono">Hero select · choose your page</p>
+          <p className="hs-kicker mono">Choose a section</p>
           <ul className="hs-grid">
             {PAGES.map((p, i) => (
               <li key={p.id}>
@@ -110,7 +110,7 @@ export default function Nav({ ready, page }) {
                   to={p.id}
                   onNavigate={() => setOpen(false)}
                   className={`hs-card ${page?.id === p.id ? 'is-current' : ''}`}
-                  style={{ '--h-a': p.theme.primary, '--h-b': p.theme.accent, '--h-c': p.theme.accent2, '--h-bg': p.theme.bg2, '--h-font': p.theme.heroFont }}
+                  style={{ '--h-a': p.theme.primary, '--h-b': p.theme.accent, '--h-c': p.theme.accent2, '--h-bg': p.theme.bg2, '--h-font': p.theme.heroFont, '--hs-len': Math.max(6, p.label.length) }}
                   tabIndex={open ? 0 : -1}
                   data-cursor="SELECT"
                 >
@@ -118,8 +118,8 @@ export default function Nav({ ready, page }) {
                   <span className="hs-emblem">
                     <Emblem id={p.emblem} size={74} />
                   </span>
-                  <span className="hs-hero">{p.hero}</span>
-                  <span className="hs-label mono">{p.label}</span>
+                  <span className="hs-hero">{p.label}</span>
+                  <span className="hs-label mono">{p.hero} theme</span>
                   <span className="hs-blurb">{p.blurb}</span>
                 </HeroLink>
               </li>

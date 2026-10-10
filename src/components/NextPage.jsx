@@ -39,10 +39,11 @@ export default function NextPage({ current }) {
     '--np-b': nxt.theme.accent,
     '--np-c': nxt.theme.accent2,
     '--np-font': nxt.theme.heroFont,
+    '--np-len': Math.max(6, nxt.label.length),
   }
   return (
     <section ref={root} className="next-page" style={style} data-section={`${current}-next`}>
-      <HeroLink to={nxt.id} className="np-link" data-cursor={isLoop ? 'AGAIN' : 'NEXT'} data-copilot={`NEXT · ${nxt.hero.toUpperCase()}`}>
+      <HeroLink to={nxt.id} className="np-link" data-cursor={isLoop ? 'AGAIN' : 'NEXT'} data-copilot={`NEXT · ${nxt.label.toUpperCase()}`}>
         <span className="np-kicker" data-np>
           {isLoop ? 'Back to the beginning' : 'Next mission'} <span className="np-rule" />
         </span>
@@ -51,9 +52,9 @@ export default function NextPage({ current }) {
             <Emblem id={nxt.emblem} size={96} />
           </span>
           <div className="np-text">
-            <h2 className="np-hero">{nxt.hero}</h2>
+            <h2 className="np-hero">{nxt.label}</h2>
             <span className="np-label">
-              {nxt.label} <span className="np-arrow">→</span>
+              {isLoop ? 'Start again' : `Section ${String(PAGES.indexOf(nxt) + 1).padStart(2, '0')} / ${String(PAGES.length).padStart(2, '0')}`} <span className="np-arrow">→</span>
             </span>
           </div>
         </div>
