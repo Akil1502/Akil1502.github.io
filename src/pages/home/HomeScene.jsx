@@ -4,16 +4,16 @@ import { useFrame, useThree } from '@react-three/fiber'
 import GlowPlane from '../../three/primitives/GlowPlane'
 import { scroll } from '../../three/scrollStore'
 import { home, updateBeats, track, trackObj, resetHome, prefersReducedMotion } from './homeStore'
-import { useHelmetGeometry } from './three/useHelmetGeometry'
 import { getArmorMaterials, armorUniforms } from './three/armor'
 import { disposeAll } from './three/useDispose'
-import Helmet from './three/Helmet'
-import Nanites, { getNaniteMaterial, naniteSize } from './three/Nanites'
+import { getNaniteMaterial, naniteSize } from './three/Nanites'
 import Reactor from './three/Reactor'
 import SkillOrbit from './three/SkillOrbit'
 import Smoke from './three/Smoke'
 import LeaderLines from './three/LeaderLines'
 import { TickRing, LockBrackets, Shockwaves } from './three/HudBits'
+import FacetHelmet from './facet/Centerpiece'
+import facetMeta from './facet/meta'
 
 // ============ HOME · IRON MAN ============
 // One pinned stage, scrubbed by scroll (beat coordinate b, see homeStore):
@@ -32,8 +32,8 @@ const DESK_H = [
   { b: 2.3, x: 2.45, y: 1.3, z: -1.6, s: 1.1, ry: 0.0, rx: -0.1 },
   { b: 2.72, x: -2.4, y: 0.55, z: 0, s: 1.45, ry: 0.42, rx: 0.05 },
   { b: 3.62, x: -2.3, y: 0.6, z: 0.3, s: 1.45, ry: 0.32, rx: 0.02 },
-  { b: 4.0, x: 3.5, y: 1.55, z: -2.8, s: 1.15, ry: -0.35, rx: 0.1 },
-  { b: 4.6, x: 3.5, y: 1.55, z: -2.8, s: 1.15, ry: -0.35, rx: 0.1 },
+  { b: 4.0, x: 3.4, y: 1.45, z: -2.2, s: 1.2, ry: -0.35, rx: 0.1 },
+  { b: 4.6, x: 3.4, y: 1.45, z: -2.2, s: 1.2, ry: -0.35, rx: 0.1 },
   { b: 5.0, x: 0, y: 0.5, z: -3.5, s: 1.0, ry: 0, rx: 0 },
 ]
 // portrait / phones: the copy sits in the lower half of the screen, so the stage lives in the upper half
@@ -44,16 +44,19 @@ const PORT_H = [
   { b: 1.6, x: 0, y: 1.75, z: -0.6, s: 0.64, ry: 0.55, rx: 0.08 },
   { b: 1.95, x: 0, y: 2.6, z: -1.4, s: 0.58, ry: 0, rx: 0 },
   { b: 2.3, x: 0, y: 3.0, z: -1.8, s: 0.55, ry: 0, rx: -0.1 },
-  { b: 2.72, x: 0, y: 1.95, z: -0.4, s: 0.76, ry: 0.18, rx: 0.06 },
-  { b: 3.62, x: 0, y: 2.0, z: 0, s: 0.78, ry: 0.06, rx: 0.03 },
+  { b: 2.72, x: 0, y: 1.78, z: -0.4, s: 0.74, ry: 0.18, rx: 0.06 },
+  { b: 3.62, x: 0, y: 1.82, z: 0, s: 0.76, ry: 0.06, rx: 0.03 },
   { b: 4.0, x: 0, y: 2.75, z: -3.4, s: 0.7, ry: 0, rx: 0.1 },
   { b: 4.6, x: 0, y: 2.75, z: -3.4, s: 0.7, ry: 0, rx: 0.1 },
   { b: 5.0, x: 0, y: 1.0, z: -4, s: 0.6, ry: 0, rx: 0 },
 ]
 const DESK_R = { x: 1.98, y: -0.1, z: 0.7, s: 0.92 }
 const PORT_R = { x: 0, y: 1.2, z: 0.2, s: 0.58 }
-const REACTOR_OFF = new THREE.Vector3(0, -1.74, 0.3) // below the helmet, head units
-const REACTOR_SCALE = 0.36
+// The centrepiece: a faceted, collectible-style helmet (src/pages/home/facet). Its meta sets where the shared
+// Reactor hangs and the size of the HUD ring + lock brackets around it.
+const REACTOR_OFF = new THREE.Vector3(...facetMeta.reactorAnchor)
+const REACTOR_SCALE = facetMeta.reactorScale
+const HUD_FRAME = facetMeta.hud
 
 // ---- scroll choreography (piecewise smoothstep keys: [b, value]) ----
 const T_ARMOR = [[0, 1], [1.92, 1], [2.3, 0], [2.68, 0], [3.2, 1], [4.55, 1], [5.0, 0]]
@@ -77,7 +80,6 @@ const DBG_POSE = { front: [0, 0.05], side: [1.5, 0.05], q: [-0.6, 0.05], q2: [0.
 
 export default function HomeScene({ tier = 'high', ready }) {
   const { size, gl, scene, camera } = useThree()
-  const geo = useHelmetGeometry(tier === 'low' ? 0.7 : 1)
   // session-cached (programs survive a round trip to another page); never disposed here
   const mats = useMemo(() => {
     const m = getArmorMaterials(tier)
@@ -251,7 +253,7 @@ export default function HomeScene({ tier = 'high', ready }) {
     if (helmInner.current) helmInner.current.visible = s.warm
 
     // ---- nanotech reveal: intro (time) ∧ scroll ----
-    if (ready && geo && s.warm) {
+    if (ready && s.warm) {
       // real time (not frame-clamped) so the suit-up always lasts ~3.2 s, even on a slow frame rate
       const rdt = Math.min(delta, 0.5)
       if (s.introDelay > 0) s.introDelay -= rdt
@@ -398,20 +400,15 @@ export default function HomeScene({ tier = 'high', ready }) {
 
       <group ref={helm}>
         <group ref={helmInner} visible={false}>
-          {geo ? (
-            <>
-              <Helmet geo={geo} mats={mats} dir={dir} />
-              <Nanites geo={geo} count={count} sourceRef={sourceLocal} material={naniteMat} />
-            </>
-          ) : null}
+          <FacetHelmet dir={dir} tier={tier} mats={mats} naniteMat={naniteMat} count={count} sourceRef={sourceLocal} />
         </group>
         {/* rim + eye lights travel with the helmet */}
         <pointLight ref={rimR} position={[-2.3, 1.1, -1.6]} color={'#ff3020'} intensity={32} distance={9} decay={2} />
         <pointLight ref={rimC} position={[2.4, -0.5, -1.4]} color={'#7fe9ff'} intensity={14} distance={8} decay={2} />
         <pointLight ref={rimG} position={[0.8, 2.8, 0.6]} color={'#ffd38a'} intensity={14} distance={7} decay={2} />
         <pointLight ref={eyeLight} position={[0, 0.2, 1.6]} color={'#9ff4ff'} intensity={0} distance={2.4} decay={2} />
-        <TickRing ref={bgRing} radius={1.62} ticks={144} gauge={0.68} color={'#f5c04a'} opacity={0.22} speed={0.05} major={12} position={[0, -0.05, -1.1]} />
-        <LockBrackets ref={brackets} w={1.85} h={2.5} position={[0, -0.1, 0.95]} color={'#f5c04a'} />
+        <TickRing ref={bgRing} radius={HUD_FRAME.ring} ticks={144} gauge={0.68} color={'#f5c04a'} opacity={0.22} speed={0.05} major={12} position={[0, -0.05, -1.1]} />
+        <LockBrackets ref={brackets} w={HUD_FRAME.bracketW} h={HUD_FRAME.bracketH} position={[0, -0.1, 0.95]} color={'#f5c04a'} />
       </group>
 
       <group ref={reactor}>
