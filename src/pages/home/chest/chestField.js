@@ -2,7 +2,7 @@
 //   landT(p) = delay(p) · NANO_D + NANO_F      (delay: 0 at the reactor … 1 at the waist / shoulder tips)
 // The same field drives the swarm (each nanite flies during [delay·D, delay·D + F]), so the solid plates fill in
 // exactly behind the arriving nanites, and scrubbing uReveal backwards retracts the suit into the reactor.
-import { NANO_D, NANO_F } from '../../three/armor.js'
+import { NANO_D, NANO_F } from '../three/armor.js'
 
 export { NANO_D, NANO_F }
 

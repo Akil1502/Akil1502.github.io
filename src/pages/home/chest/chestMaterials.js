@@ -3,7 +3,7 @@
 // exploded-view offset (aExp) — so the whole suit is a handful of draw calls. The under-suit adds the cyan seam glow
 // (energy pulsing outward from the reactor through every panel gap) and the circuitry traces for the exploded view.
 import * as THREE from 'three'
-import { armorUniforms } from '../../three/armor.js'
+import { armorUniforms } from '../three/armor.js'
 import { chestDelayGLSL, NANO_D, NANO_F, REACTOR } from './chestField.js'
 
 export const chestUniforms = {

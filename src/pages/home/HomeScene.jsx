@@ -12,8 +12,8 @@ import SkillOrbit from './three/SkillOrbit'
 import Smoke from './three/Smoke'
 import LeaderLines from './three/LeaderLines'
 import { TickRing, LockBrackets, Shockwaves } from './three/HudBits'
-import FacetHelmet from './facet/Centerpiece'
-import facetMeta from './facet/meta'
+import ChestArmor from './chest/Centerpiece'
+import chestMeta from './chest/meta'
 
 // ============ HOME · IRON MAN ============
 // One pinned stage, scrubbed by scroll (beat coordinate b, see homeStore):
@@ -52,11 +52,11 @@ const PORT_H = [
 ]
 const DESK_R = { x: 1.98, y: -0.1, z: 0.7, s: 0.92 }
 const PORT_R = { x: 0, y: 1.2, z: 0.2, s: 0.58 }
-// The centrepiece: a faceted, collectible-style helmet (src/pages/home/facet). Its meta sets where the shared
-// Reactor hangs and the size of the HUD ring + lock brackets around it.
-const REACTOR_OFF = new THREE.Vector3(...facetMeta.reactorAnchor)
-const REACTOR_SCALE = facetMeta.reactorScale
-const HUD_FRAME = facetMeta.hud
+// The centrepiece: armoured chest plates built around the arc reactor (src/pages/home/chest). Its meta sets where
+// the shared Reactor sits (in the chest socket) and the size of the HUD ring + lock brackets around it.
+const REACTOR_OFF = new THREE.Vector3(...chestMeta.reactorAnchor)
+const REACTOR_SCALE = chestMeta.reactorScale
+const HUD_FRAME = chestMeta.hud
 
 // ---- scroll choreography (piecewise smoothstep keys: [b, value]) ----
 const T_ARMOR = [[0, 1], [1.92, 1], [2.3, 0], [2.68, 0], [3.2, 1], [4.55, 1], [5.0, 0]]
@@ -400,7 +400,7 @@ export default function HomeScene({ tier = 'high', ready }) {
 
       <group ref={helm}>
         <group ref={helmInner} visible={false}>
-          <FacetHelmet dir={dir} tier={tier} mats={mats} naniteMat={naniteMat} count={count} sourceRef={sourceLocal} />
+          <ChestArmor dir={dir} tier={tier} mats={mats} naniteMat={naniteMat} count={count} sourceRef={sourceLocal} />
         </group>
         {/* rim + eye lights travel with the helmet */}
         <pointLight ref={rimR} position={[-2.3, 1.1, -1.6]} color={'#ff3020'} intensity={32} distance={9} decay={2} />
