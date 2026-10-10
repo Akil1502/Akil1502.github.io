@@ -1,12 +1,13 @@
 // ARMOURED CHEST — procedural geometry (pure JS, no three.js objects; runs once per quality level and is cached).
 //
-// 1. The under-suit is a signed-distance torso (smooth union of ellipsoids/capsules: rib cage, pectorals, abdomen,
+// 1. The under-suit is a signed-distance torso (smooth union of ellipsoids/capsules: rib cage, lats, pectorals, abdomen,
 //    waist, trapezius, deltoids, neck), shrink-wrapped by a radial ray-march into one smooth mesh.
 // 2. Every armour plate is drawn as a 2D outline on a *chart* (cylindrical wrap of the torso, a top-down view for the
 //    collar, spherical charts for the pauldron lames), inset by half a seam gap, then lifted off the surface with a
 //    bevel profile computed from the true 3D distance to the plate edge: crisp chamfered rim + gentle crown, a side
 //    wall diving into the body and (for free-standing shells) a back face.
-// 3. Turned parts (reactor bezel, gorget rings) are lathes.
+// 3. Turned parts (reactor socket, coil teeth, bolts, gorget rings) are lathes; the pauldron lames are shells on
+//    (slightly ellipsoidal) spherical charts round the shoulder ball.
 // Every vertex carries aExp (xyz = exploded-view offset, w = breathing phase); the shader moves it (one draw call per
 // material, no per-part transforms).
 import { REACTOR_D as REACTOR, SCALE, chestDelay } from './chestField.js'
@@ -61,46 +62,39 @@ function smin(a, b, k) {
   return Math.min(a, b) - h * h * k * 0.25
 }
 
-export const Y_BOT = -1.17
-export const Y_TOP = 0.93
-// upper arm: shoulder → mid-bicep, cut square to its axis
-export const ARM_A = [0.9, 0.6, ZA]
-export const ARM_B = [1.036, -0.188, ZA + 0.04]
-export const ARM_R = 0.15
-const ARM_D = (() => {
-  const d = [ARM_B[0] - ARM_A[0], ARM_B[1] - ARM_A[1], ARM_B[2] - ARM_A[2]]
-  const l = Math.hypot(d[0], d[1], d[2])
-  return [d[0] / l, d[1] / l, d[2] / l, l]
-})()
-export const ARM_CUT = 0.63 // distance along the arm axis
-const CUT = [ARM_A[0] + ARM_D[0] * ARM_CUT, ARM_A[1] + ARM_D[1] * ARM_CUT, ARM_A[2] + ARM_D[2] * ARM_CUT]
-const R_CUT = ARM_R + 0.018 - 0.04 * (ARM_CUT / ARM_D[3]) // arm radius at the cut
+export const Y_BOT = -1.1
+export const Y_TOP = 1.05
+// shoulder ball (the pauldron lames shingle over it; there are no arms — the bust is cut at the deltoids)
+export const DELT = [0.84, 0.56, ZA - 0.03]
+const DELT_R = 0.235
 
-// torso without the shoulder balls and arms: what the cylindrical torso chart wraps (flank plates must not climb
-// onto the arms)
+// Heroic V-taper torso: a broad rib cage, lats flaring under the arms and tapering into a narrow waist, two flat
+// sculpted pectorals, a narrow abdomen. Without the shoulder balls: this is what the cylindrical torso chart wraps
+// (flank plates must not climb onto the shoulders).
 export function sdTorso(x, y, z) {
   const ax = Math.abs(x)
-  let d = ell(ax, y, z, 0, 0.26, ZA + 0.03, 0.72, 0.64, 0.43)
-  const pec = smin(ell(x, y, z, 0.33, 0.35, ZA + 0.27, 0.37, 0.28, 0.32), ell(x, y, z, -0.33, 0.35, ZA + 0.27, 0.37, 0.28, 0.32), 0.1)
+  let d = ell(ax, y, z, 0, 0.3, ZA + 0.02, 0.7, 0.6, 0.42) // rib cage
+  d = smin(d, taper(ax, y, z, 0.46, 0.4, ZA - 0.03, 0.25, -0.72, ZA + 0.01, 0.25, 0.12), 0.16) // lats → the V
+  const pec = smin(ell(x, y, z, 0.31, 0.4, ZA + 0.25, 0.37, 0.27, 0.29), ell(x, y, z, -0.31, 0.4, ZA + 0.25, 0.37, 0.27, 0.29), 0.1)
   d = smin(d, pec, 0.12)
-  d = smin(d, ell(ax, y, z, 0, -0.5, ZA + 0.07, 0.5, 0.66, 0.38), 0.18)
-  d = smin(d, ell(ax, y, z, 0, -1.02, ZA + 0.03, 0.445, 0.4, 0.33), 0.15)
-  d = smin(d, cap(ax, y, z, 0.16, 0.86, ZA - 0.02, 0.74, 0.74, ZA, 0.16), 0.14)
+  d = smin(d, ell(ax, y, z, 0, -0.45, ZA + 0.07, 0.39, 0.62, 0.35), 0.18) // abdomen
+  d = smin(d, ell(ax, y, z, 0, -0.97, ZA + 0.03, 0.35, 0.36, 0.29), 0.15) // waist
+  d = smin(d, cap(ax, y, z, 0.17, 0.72, ZA - 0.03, 0.64, 0.67, ZA - 0.03, 0.14), 0.14) // trapezius: slopes from the neck to the shoulder
   return Math.max(d, Y_BOT - y, y - Y_TOP)
 }
 
+// the reactor well: a cylinder carved into the under-suit behind the socket (the chrome wall and glow floor line it),
+// deep enough that the reactor can sit recessed and tilt a little without touching the body
+const WELL_R = 0.236
+const WELL_Z = -0.118
 export function sdBody(x, y, z) {
   const ax = Math.abs(x)
-  let d = ell(ax, y, z, 0, 0.26, ZA + 0.03, 0.72, 0.64, 0.43) // rib cage
-  const pec = smin(ell(x, y, z, 0.33, 0.35, ZA + 0.27, 0.37, 0.28, 0.32), ell(x, y, z, -0.33, 0.35, ZA + 0.27, 0.37, 0.28, 0.32), 0.1)
-  d = smin(d, pec, 0.12)
-  d = smin(d, ell(ax, y, z, 0, -0.5, ZA + 0.07, 0.5, 0.66, 0.38), 0.18) // abdomen
-  d = smin(d, ell(ax, y, z, 0, -1.02, ZA + 0.03, 0.445, 0.4, 0.33), 0.15) // waist
-  d = smin(d, cap(ax, y, z, 0.16, 0.86, ZA - 0.02, 0.74, 0.74, ZA, 0.16), 0.14) // trapezius
-  d = smin(d, sph(ax, y, z, 0.88, 0.62, ZA, 0.225), 0.1) // deltoid
-  const arm = Math.max(taper(ax, y, z, ARM_A[0], ARM_A[1], ARM_A[2], ARM_B[0], ARM_B[1], ARM_B[2], ARM_R + 0.018, ARM_R - 0.022), (ax - CUT[0]) * ARM_D[0] + (y - CUT[1]) * ARM_D[1] + (z - CUT[2]) * ARM_D[2])
-  d = smin(d, arm, 0.05)
-  d = smin(d, cap(ax, y, z, 0, 0.72, ZA - 0.02, 0, 1.16, ZA - 0.04, 0.19), 0.1) // neck
+  let d = sdTorso(x, y, z)
+  d = smin(d, sph(ax, y, z, DELT[0], DELT[1], DELT[2], DELT_R), 0.1) // deltoid
+  // neck: short, it ends under the gorget's seal (the collar is hollow, there is no head)
+  d = smin(d, cap(ax, y, z, 0, 0.56, ZA - 0.02, 0, 0.64, ZA - 0.03, 0.19), 0.1)
+  const well = Math.max(Math.hypot(x - REACTOR[0], y - REACTOR[1]) - WELL_R, REACTOR[2] + WELL_Z - z)
+  d = Math.max(d, -well)
   return Math.max(d, Y_BOT - y, y - Y_TOP)
 }
 
@@ -195,35 +189,8 @@ function topChart(mirror = false) {
     },
   }
 }
-// cylinder around the upper-arm axis: u = θ·ARM_R (θ = 0 faces outwards, + towards the front), v = distance along
-// the axis from the shoulder joint
-function armChart(mirror = false) {
-  const s = mirror ? -1 : 1
-  const A = [s * ARM_A[0], ARM_A[1], ARM_A[2]]
-  const D = [s * ARM_D[0], ARM_D[1], ARM_D[2]]
-  let b1 = [s, 0, 0]
-  const dp = dot(b1, D)
-  b1 = norm([b1[0] - D[0] * dp, b1[1] - D[1] * dp, b1[2] - D[2] * dp])
-  let b2 = cross(D, b1)
-  if (b2[2] < 0) b2 = [-b2[0], -b2[1], -b2[2]]
-  return {
-    at(u, v, P, N) {
-      const th = u / ARM_R
-      const rd = [b1[0] * Math.cos(th) + b2[0] * Math.sin(th), b1[1] * Math.cos(th) + b2[1] * Math.sin(th), b1[2] * Math.cos(th) + b2[2] * Math.sin(th)]
-      const o = [A[0] + D[0] * v + rd[0] * 0.5, A[1] + D[1] * v + rd[1] * 0.5, A[2] + D[2] * v + rd[2] * 0.5]
-      const t = march(o[0], o[1], o[2], -rd[0], -rd[1], -rd[2], 0.5)
-      const tt = t < 0 ? 0.5 - ARM_R : t
-      P[0] = o[0] - rd[0] * tt
-      P[1] = o[1] - rd[1] * tt
-      P[2] = o[2] - rd[2] * tt
-      gradient(P[0], P[1], P[2], N)
-    },
-    frame: { A, D, b1, b2 },
-  }
-}
-
 // front projection: u = x, v = y (used only to convert design points)
-function frontPoint(x, y) {
+export function frontPoint(x, y) {
   const t = march(x, y, 1.2, 0, 0, -1, 3)
   const P = [x, y, t < 0 ? 0 : 1.2 - t]
   if (t < 0) projectToSurface(P)
@@ -231,7 +198,7 @@ function frontPoint(x, y) {
 }
 // spherical shell chart for pauldron lames: axis A, zero-azimuth B1; 'polar' (cap: azimuthal-equidistant) or
 // 'band' (u = α·r·sinβref, v = β·r). r(β) may flare outwards.
-function sphereChart({ C, A, B1, r, flare = 0, polar = false, betaRef = 1, mirror = false }) {
+function sphereChart({ C, A, B1, r, flare = 0, polar = false, betaRef = 1, mirror = false, scale = [1, 1, 1] }) {
   const s = mirror ? -1 : 1
   const c = [s * C[0], C[1], C[2]]
   const a = norm([s * A[0], A[1], A[2]])
@@ -251,9 +218,13 @@ function sphereChart({ C, A, B1, r, flare = 0, polar = false, betaRef = 1, mirro
   const pt = (al, be, out) => {
     const rr = r + flare * be * be
     const sb = Math.sin(be)
-    const dx = b1[0] * sb * Math.cos(al) + b2[0] * sb * Math.sin(al) + a[0] * Math.cos(be)
-    const dy = b1[1] * sb * Math.cos(al) + b2[1] * sb * Math.sin(al) + a[1] * Math.cos(be)
-    const dz = b1[2] * sb * Math.cos(al) + b2[2] * sb * Math.sin(al) + a[2] * Math.cos(be)
+    // (scaled per axis of the local frame: [along A, along B1, along B2] → an ellipsoidal shell)
+    const u1 = sb * Math.cos(al) * scale[1]
+    const u2 = sb * Math.sin(al) * scale[2]
+    const u0 = Math.cos(be) * scale[0]
+    const dx = b1[0] * u1 + b2[0] * u2 + a[0] * u0
+    const dy = b1[1] * u1 + b2[1] * u2 + a[1] * u0
+    const dz = b1[2] * u1 + b2[2] * u2 + a[2] * u0
     out[0] = c[0] + dx * rr
     out[1] = c[1] + dy * rr
     out[2] = c[2] + dz * rr
@@ -263,6 +234,7 @@ function sphereChart({ C, A, B1, r, flare = 0, polar = false, betaRef = 1, mirro
   const t1 = [0, 0, 0]
   const t2 = [0, 0, 0]
   return {
+    frame: { c, a, b1, b2 },
     at(u, v, P, N) {
       const [al, be] = ab(u, v)
       pt(al, be, P)
@@ -618,6 +590,10 @@ function plate(m, chart, outline, opt, Q) {
     return Math.sqrt(best)
   }
   const e4 = [o.exp[0], o.exp[1], o.exp[2], o.phase]
+  // optional sculpt on top of the machined profile (ridges, dished panels), faded in from the plate edge so the rim
+  // and its crisp chamfer stay intact
+  const ramp = o.bevel + o.cham[0] + 0.012
+  const xh = (P, e) => (o.extra ? o.extra(P) * Math.min(1, e / ramp) : 0)
   // ---- top surface
   const v0 = m.n
   const i0 = m.idx.length
@@ -626,11 +602,12 @@ function plate(m, chart, outline, opt, Q) {
       const P = SP[r][i]
       const Nn = SN[r][i]
       const e = r < offs.length ? offs[r] : Math.max(offs[offs.length - 1], distEdge(P))
-      const h = profile(e, o)
+      const h = profile(e, o) + xh(P, e)
       m.add([P[0] + Nn[0] * h, P[1] + Nn[1] * h, P[2] + Nn[2] * h], Nn, e4)
     }
   }
-  const hc = profile(Math.max(offs[offs.length - 1], distEdge(cP)), o)
+  const ec = Math.max(offs[offs.length - 1], distEdge(cP))
+  const hc = profile(ec, o) + xh(cP, ec)
   const vc = m.add([cP[0] + cN[0] * hc, cP[1] + cN[1] * hc, cP[2] + cN[2] * hc], cN, e4)
   for (let r = 0; r < R - 1; r++) {
     for (let i = 0; i < N; i++) {
@@ -695,7 +672,7 @@ function plate(m, chart, outline, opt, Q) {
   // nanite sampling only uses the top surface
   m.top = m.top || []
   m.top.push([i0, topEnd])
-  return { centroid: [cP[0] + cN[0] * hc, cP[1] + cN[1] * hc, cP[2] + cN[2] * hc] }
+  return { centroid: [cP[0] + cN[0] * hc, cP[1] + cN[1] * hc, cP[2] + cN[2] * hc], normal: cN, exp: o.exp, phase: o.phase }
 }
 
 // lathe around an arbitrary axis: profile [[r, h], ...] (open polyline), axis frame (C, A, B1)
@@ -792,12 +769,14 @@ function buildBody(m, Q) {
 // ------------------------------------------------------------------------------------------------ the design
 // Design points are given in FRONT view coordinates (x, y) and dropped onto the body: F(x, y) → surface point.
 const F = (x, y, r) => ({ P: frontPoint(x, y), r })
-const RB = 0.35 // bezel outer radius (plates start here)
+// a point on the torso wrap (u = θ·RM: 0 front · 0.94 side · 1.885 back)
+const Cy = (u, v, r) => ({ P: cylP(u, v), r })
+const RB = 0.384 // bezel outer radius (plates start here)
 const BZ = (deg, r) => {
   const a = (deg * Math.PI) / 180
   return F(REACTOR[0] + Math.cos(a) * (RB + 0.004), REACTOR[1] + Math.sin(a) * (RB + 0.004), r ?? 0)
 }
-const arc = (d0, d1, step = 12) => {
+const arc = (d0, d1, step = 10) => {
   const out = []
   const n = Math.max(1, Math.round(Math.abs(d1 - d0) / step))
   for (let k = 0; k <= n; k++) out.push(BZ(d0 + ((d1 - d0) * k) / n))
@@ -806,7 +785,7 @@ const arc = (d0, d1, step = 12) => {
 const mirrorF = (list) => list.map((p) => (p.P ? { P: [-p.P[0], p.P[1], p.P[2]], r: p.r } : p))
 // explode offset: radially away from the reactor (+ a little towards the viewer)
 function radial(c, amt, fwd = 0.25, extra = [0, 0, 0]) {
-  const d = norm([c[0] - REACTOR[0], (c[1] - REACTOR[1]) * 1.0, (c[2] - REACTOR[2]) * 0.5 + 0.02])
+  const d = norm([c[0] - REACTOR[0], (c[1] - REACTOR[1]) * 1.0, (c[2] - REACTOR[2]) * 0.35 + 0.02])
   return [d[0] * amt + extra[0], d[1] * amt + extra[1], d[2] * amt + fwd * amt + extra[2]]
 }
 function centre3(list) {
@@ -821,17 +800,29 @@ function centre3(list) {
   return [x / list.length, y / list.length, z / list.length]
 }
 
+// Plate styles: thin machined shells (a rounded rim, a crisp chamfer band that catches the rim light, a soft crown).
+const RED = { T: 0.022, h0: 0.008, bevel: 0.013, cham: [0.03, 0.009], crown: 0.014, crownW: 0.15 }
+const GOLD = { T: 0.02, h0: 0.008, bevel: 0.012, cham: [0.024, 0.008], crown: 0.01, crownW: 0.09 }
+const GUN = { T: 0.018, h0: 0.007, bevel: 0.011, cham: [0.02, 0.006], crown: 0.006, crownW: 0.1 }
+// a red shell sitting on a gold under-layer, inset by TRIM: a thin gold trim shows all round it
+const TRIM = 0.026
+// a ridge along the centre line (x = 0): sternum, keel
+const RIDGE = (w, h) => (P) => h * Math.pow(Math.max(0, 1 - Math.abs(P[0]) / w), 1.4)
+const sstep = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t))
+// pectoral shelf: the shell thickens towards its lower edge, so the pec overhangs the ribs below with a shadow line
+const PEC_SHELF = (P) => 0.026 * sstep((0.42 - P[1]) / 0.3)
+
 export function buildChest(quality = 'high') {
   const Q =
     quality === 'low'
-      ? { spacing: 0.024, minN: 28, maxN: 120, J: 5, bodyU: 96, bodyV: 72, lathe: 64 }
-      : { spacing: 0.015, minN: 40, maxN: 220, J: 7, bodyU: 168, bodyV: 124, lathe: 120 }
+      ? { spacing: 0.026, minN: 28, maxN: 110, J: 5, bodyU: 96, bodyV: 72, lathe: 64 }
+      : { spacing: 0.013, minN: 40, maxN: 240, J: 7, bodyU: 168, bodyV: 124, lathe: 128 }
   const M = { red: new Mesh(), gold: new Mesh(), gun: new Mesh(), chrome: new Mesh(), under: new Mesh(), glow: new Mesh() }
   const anchors = {}
   const cyl = [cylChart(false), cylChart(true)]
   const top = [topChart(false), topChart(true)]
   const sides = [0, 1]
-  // plate on both sides: outline given for the +x side
+  // plate on both sides: outline given for the +x side; returns [+x result, −x result]
   const pair = (mat, list, opt, chartPair = cyl, explodeAmt = 0.3, fwd = 0.25) => {
     const res = []
     for (const s of sides) {
@@ -842,211 +833,171 @@ export function buildChest(quality = 'high') {
   }
   const single = (mat, list, opt, chart = cyl[0], explodeAmt = 0.3, fwd = 0.25) => plate(M[mat], chart, list, { explode: [explodeAmt, fwd], ...opt }, Q)
 
-  // ---- pectorals (red): bezel arc → collar line → armpit → under-pec sweep
-  const pecPts = [
-    BZ(78, 0.012),
-    F(0.135, 0.735, 0.03),
-    F(0.36, 0.715, 0.08),
-    F(0.55, 0.62, 0.07),
-    F(0.625, 0.44, 0.07),
-    F(0.615, 0.2, 0.08),
-    F(0.5, 0.055, 0.1),
-    F(0.335, 0.0, 0.03),
-    BZ(-48, 0.012),
-    ...arc(-48, 78).slice(1, -1),
+  // ---- pectorals: broad, flat-sculpted candy-red shells on a gold under-layer, from the bezel out to the armpit
+  const P_IN = F(0.085, 0.755, 0.025) // top inner corner (beside the sternum ridge)
+  const P_TOP = F(0.34, 0.73, 0.1)
+  const P_SH = F(0.69, 0.63, 0.08) // shoulder corner (tucked under the pauldron)
+  const pecPts = [BZ(72, 0.012), P_IN, P_TOP, P_SH, Cy(0.99, 0.48, 0.08), Cy(0.95, 0.22, 0.1), F(0.47, 0.1, 0.12), F(0.31, 0.05, 0.03), BZ(-34, 0.012), ...arc(-34, 72).slice(1, -1)]
+  pair('gold', pecPts, { ...GOLD, T: 0.014, cham: [0.012, 0.004], crown: 0.008, crownW: 0.18, seam: 1 }, cyl, 0.3)
+  const pecs = pair('red', pecPts, { ...RED, gap: 0.018 + TRIM, lift: 0.02, T: 0.02, crown: 0.018, crownW: 0.2, seam: 0, extra: PEC_SHELF }, cyl, 0.4)
+
+  // ---- sternum: a gold ridge between the pecs above the bezel, and a keel below it pointing down into the abs
+  single('gold', [...arc(72, 108), F(-0.085, 0.755, 0.025), F(0, 0.8, 0.03), F(0.085, 0.755, 0.025)], { ...GOLD, crown: 0, extra: RIDGE(0.1, 0.028) }, cyl[0], 0.34)
+  single('gold', [...arc(-146, -34), F(0.31, 0.05, 0.03), F(0.22, -0.08, 0.04), F(0, -0.2, 0.03), F(-0.22, -0.08, 0.04), F(-0.31, 0.05, 0.03)], { ...GOLD, crown: 0.004, extra: RIDGE(0.32, 0.034) }, cyl[0], 0.26, 0.3)
+
+  // ---- abdominals: four tapering gold chevron rows, each split down the middle (eight sculpted segments)
+  const E = [
+    [0.31, 0.05],
+    [0.335, -0.2],
+    [0.325, -0.42],
+    [0.3, -0.64],
+    [0.26, -0.9],
   ]
-  pair('red', pecPts, { T: 0.04, cham: [0.042, 0.014], crown: 0.012, crownW: 0.16 }, cyl, 0.34)
-
-  // ---- sternum keel (gold) under the reactor, pointing down
-  const keel = [...arc(-132, -48), F(0.335, 0.0, 0.03), F(0.235, -0.165, 0.05), F(0.0, -0.31, 0.04), F(-0.235, -0.165, 0.05), F(-0.335, 0.0, 0.03)]
-  single('gold', keel, { T: 0.036, crown: 0.012, crownW: 0.1 }, cyl[0], 0.32)
-  // ---- upper sternum (gold) between the pecs above the bezel
-  const ust = [...arc(78, 102), F(-0.135, 0.735, 0.03), F(0, 0.775, 0.04), F(0.135, 0.735, 0.03)]
-  single('gold', ust, { T: 0.03, crown: 0.006 }, cyl[0], 0.3)
-
-  // ---- rib slats (gunmetal) under the pecs
-  pair('gun', [F(0.335, 0.0, 0.02), F(0.5, 0.055, 0.06), F(0.615, 0.2, 0.03), F(0.64, 0.06, 0.04), F(0.55, -0.055, 0.05), F(0.297, -0.07, 0.02)], { T: 0.03, crown: 0.008 }, cyl, 0.4)
-  pair('gun', [F(0.297, -0.07, 0.02), F(0.55, -0.055, 0.04), F(0.64, 0.06, 0.03), F(0.62, -0.1, 0.04), F(0.5, -0.2, 0.05), F(0.235, -0.165, 0.02)], { T: 0.028, crown: 0.008 }, cyl, 0.44)
-
-  // ---- abdominals (gold): four chevron bands that echo the keel's V
-  const absEdge = [
-    [0.355, -0.215],
-    [0.35, -0.4],
-    [0.34, -0.565],
-    [0.325, -0.73],
-    [0.29, -0.955],
-  ]
-  const absMid = [-0.31, -0.48, -0.645, -0.81, -0.955]
+  const MID = [-0.2, -0.4, -0.6, -0.79, -0.9]
+  const abs = []
   for (let k = 0; k < 4; k++) {
-    const [ex0, ey0] = absEdge[k]
-    const [ex1, ey1] = absEdge[k + 1]
-    const topE =
-      k === 0
-        ? [F(-ex0, ey0, 0.03), F(-0.235, -0.165, 0.02), F(0, absMid[0], 0.03), F(0.235, -0.165, 0.02), F(ex0, ey0, 0.03)]
-        : [F(-ex0, ey0, 0.03), F(0, absMid[k], 0.04), F(ex0, ey0, 0.03)]
-    const botE = k === 3 ? [F(ex1, ey1, 0.04), F(-ex1, ey1, 0.04)] : [F(ex1, ey1, 0.03), F(0, absMid[k + 1], 0.04), F(-ex1, ey1, 0.03)]
-    single('gold', [...topE, ...botE], { T: 0.036, crown: 0.012, crownW: 0.08, bevel: 0.015 }, cyl[0], 0.34 + k * 0.05, 0.45)
+    for (const s of sides) {
+      const sx = s ? -1 : 1
+      const topE = k === 0 ? [F(0, -0.2, 0.02), F(sx * 0.22, -0.08, 0.03), F(sx * 0.31, 0.05, 0.03)] : [F(0, MID[k], 0.02), F(sx * E[k][0], E[k][1], 0.03)]
+      const botE = [F(sx * E[k + 1][0], E[k + 1][1], 0.03), F(0, MID[k + 1], 0.02)]
+      const c = centre3([...topE, ...botE])
+      const amt = 0.3 + k * 0.08
+      abs.push(single('gold', [...topE, ...botE], { ...GOLD, crown: 0.009, crownW: 0.1, phase: 0.5 + k * 0.1, explode: null, exp: radial(c, amt, 0.35, [sx * 0.05, 0, 0]) }))
+    }
   }
 
-  // ---- obliques (red): wrap from the abs round to the flank, tapering into the belt
-  pair('red', [F(0.355, -0.215, 0.02), F(0.5, -0.2, 0.03), F(0.62, -0.1, 0.03), { P: cylP(1.02, -0.12) }, { P: cylP(0.98, -0.6), r: 0.05 }, F(0.335, -0.6, 0.02), F(0.34, -0.565, 0.0), F(0.35, -0.4, 0.0)], { T: 0.038, crown: 0.016, crownW: 0.12 }, cyl, 0.42)
-  pair('red', [F(0.335, -0.6, 0.02), { P: cylP(0.98, -0.6), r: 0.03 }, { P: cylP(0.92, -0.96), r: 0.05 }, F(0.29, -0.955, 0.03), F(0.325, -0.73, 0.0)], { T: 0.036, crown: 0.014, crownW: 0.12 }, cyl, 0.44)
-
-  // ---- flank (gunmetal slats under the arm) + back (red)
-  const flank = [
-    [F(0.625, 0.47, 0.02), { P: cylP(1.32, 0.45), r: 0.03 }, { P: cylP(1.32, 0.29), r: 0.03 }, F(0.62, 0.29, 0.02)],
-    [F(0.62, 0.29, 0.02), { P: cylP(1.32, 0.27), r: 0.03 }, { P: cylP(1.32, 0.09), r: 0.03 }, F(0.615, 0.2, 0.0), F(0.64, 0.06, 0.02)],
-    [F(0.64, 0.06, 0.02), { P: cylP(1.32, 0.07), r: 0.03 }, { P: cylP(1.32, -0.1), r: 0.03 }, F(0.62, -0.1, 0.02)],
-  ]
-  flank.forEach((ol, k) => pair('gun', ol, { T: 0.03, crown: 0.01, radius: 0.03 }, cyl, 0.42 + k * 0.03, 0.0))
+  // ---- side-rib plates (red): under the pecs and round the flank; a diagonal seam splits ribs / obliques (the V)
+  const ribs = pair('red', [F(0.31, 0.05, 0.02), F(0.47, 0.1, 0.1), Cy(0.95, 0.22, 0.04), Cy(1.3, 0.24, 0.04), Cy(1.3, 0.06, 0.03), F(0.335, -0.2, 0.02)], { ...RED, crown: 0.014, crownW: 0.12 }, cyl, 0.42, 0.12)
+  pair('red', [F(0.335, -0.2, 0.02), Cy(1.3, 0.06, 0.03), Cy(1.3, -0.12, 0.04), F(0.325, -0.42, 0.02)], { ...RED, crown: 0.012, crownW: 0.1 }, cyl, 0.45, 0.12)
+  pair('red', [F(0.325, -0.42, 0.02), Cy(1.3, -0.12, 0.03), Cy(1.22, -0.9, 0.05), F(0.26, -0.9, 0.03), F(0.3, -0.64, 0)], { ...RED, crown: 0.014, crownW: 0.14 }, cyl, 0.48, 0.12)
+  // lat slats under the arm
+  pair('red', [Cy(0.99, 0.48, 0.02), Cy(1.3, 0.58, 0.03), Cy(1.3, 0.41, 0.03), Cy(0.97, 0.35, 0.02)], { ...RED, crown: 0.008 }, cyl, 0.46, 0.0)
+  pair('red', [Cy(0.97, 0.35, 0.02), Cy(1.3, 0.41, 0.03), Cy(1.3, 0.24, 0.03), Cy(0.95, 0.22, 0.02)], { ...RED, crown: 0.008 }, cyl, 0.5, 0.0)
   // back plates
-  pair('red', [{ P: cylP(1.36, 0.62) }, { P: cylP(1.86, 0.66) }, { P: cylP(1.86, -0.12), r: 0.05 }, { P: cylP(1.36, -0.12) }], { T: 0.036, crown: 0.02, crownW: 0.15, radius: 0.06 }, cyl, 0.36, -0.6)
-  pair('red', [{ P: cylP(1.06, -0.14) }, { P: cylP(1.86, -0.14) }, { P: cylP(1.86, -0.95), r: 0.05 }, { P: cylP(0.98, -0.95), r: 0.05 }], { T: 0.034, crown: 0.016, crownW: 0.15, radius: 0.06 }, cyl, 0.36, -0.6)
+  pair('red', [Cy(1.3, 0.66), Cy(1.878, 0.7), Cy(1.878, -0.12, 0.05), Cy(1.3, -0.12)], { ...RED, crown: 0.02, crownW: 0.15, radius: 0.06 }, cyl, 0.36, -0.6)
+  pair('red', [Cy(1.3, -0.12), Cy(1.878, -0.12), Cy(1.878, -0.9, 0.05), Cy(1.22, -0.9, 0.05)], { ...RED, crown: 0.016, crownW: 0.15, radius: 0.06 }, cyl, 0.36, -0.6)
 
-  // ---- belt (gunmetal) + front buckle (gold)
-  single('gold', [[-0.16, -0.962, 0.02], [0.16, -0.962, 0.02], [0.13, -1.14, 0.03], [-0.13, -1.14, 0.03]], { T: 0.044, crown: 0.012 }, cyl[0], 0.4, 0.4)
+  // ---- belt (gunmetal segments) + front buckle (gold)
+  single('gold', [[-0.15, -0.922, 0.02], [0.15, -0.922, 0.02], [0.12, -1.085, 0.03], [-0.12, -1.085, 0.03]], { ...GOLD, T: 0.03, crown: 0.01 }, cyl[0], 0.4, 0.4)
   for (const s of sides) {
-    const ch = cyl[s]
     const segs = [
-      [0.165, 0.62],
-      [0.62, 1.12],
-      [1.12, 1.62],
-      [1.62, 1.885],
+      [0.155, 0.6],
+      [0.6, 1.1],
+      [1.1, 1.6],
+      [1.6, 1.885],
     ]
     for (const [a, b] of segs) {
       const ol = [
-        [a + 0.005, -0.965],
-        [b, -0.965],
-        [b, -1.14],
-        [a, -1.14],
+        [a + 0.005, -0.922],
+        [b, -0.922],
+        [b, -1.085],
+        [a, -1.085],
       ].map(([u, v]) => [u, v, 0.02])
-      plate(M.gun, ch, ol, { T: 0.03, crown: 0.006, explode: [0.4, 0.1, [0, -0.1, 0]] }, Q)
+      plate(M.gun, cyl[s], ol, { ...GUN, T: 0.024, explode: [0.4, 0.1, [0, -0.12, 0]] }, Q)
     }
   }
 
-  // ---- collar / trapezius (gold, top-down chart)
-  const collar = [
-    { P: frontPoint(0.135, 0.735), r: 0.02 },
-    { P: frontPoint(0.36, 0.715), r: 0.04 },
-    { P: frontPoint(0.55, 0.62), r: 0.04 },
-    [0.64, -(ZA - 0.02), 0.04],
-    [0.6, -(ZA - 0.2), 0.05],
-    [0.22, -(ZA - 0.2), 0.05],
-    [0.22, -(ZA + 0.13), 0.06],
-  ]
-  pair('red', collar, { T: 0.034, cham: [0.03, 0.01], crown: 0.008, crownW: 0.1, radius: 0.03 }, top, 0.34, 0.0)
-  pair('red', [[0.2, -(ZA - 0.22), 0.03], [0.6, -(ZA - 0.22), 0.05], [0.5, -(ZA - 0.31), 0.05], [0.18, -(ZA - 0.31), 0.04]], { T: 0.03, cham: [0.02, 0.006] }, top, 0.34, -0.2)
+  // ---- collarbones (gunmetal) + yoke over the trapezius (red), top-down chart; the gorget sits on both
+  const GR = 0.3 // gorget base radius (around the neck axis at z = ZA − 0.03)
+  const gz = (x) => -(ZA - 0.03) - Math.sqrt(Math.max(0, GR * GR - x * x)) // top-chart v of the gorget's front edge
+  pair('gun', [{ P: P_IN.P, r: 0.015 }, { P: P_TOP.P, r: 0.06 }, { P: P_SH.P, r: 0.05 }, [0.7, 0.44, 0.03], [0.36, 0.385, 0.03], [0.24, gz(0.24), 0], [0.16, gz(0.16), 0], [0.095, gz(0.095), 0.015]], { ...GUN, T: 0.022, crown: 0.012, crownW: 0.05, radius: 0.03 }, top, 0.34, 0.0)
+  pair('red', [[0.25, 0.4, 0.02], [0.36, 0.385, 0.03], [0.7, 0.44, 0.05], [0.62, 0.745, 0.06], [0.25, 0.745, 0.04], [0.3, 0.56, 0.02]], { ...RED, crown: 0.012, crownW: 0.1, radius: 0.04 }, top, 0.4, -0.15)
 
-  // ---- reactor bezel: gold outer collar + chrome inner ring + dark socket + glow ring
-  const zs = frontPoint(REACTOR[0], REACTOR[1])[2]
-  const BC = [REACTOR[0], REACTOR[1], zs]
-  const bzExp = [0, 0, 0.1]
-  lathe(M.gold, [[0.352, -0.09], [0.352, 0.03], [0.344, 0.058], [0.33, 0.07], [0.288, 0.07], [0.276, 0.062]], BC, [0, 0, 1], Q.lathe, bzExp, 0.1)
-  lathe(M.chrome, [[0.276, 0.056], [0.268, 0.066], [0.252, 0.066], [0.244, 0.054], [0.24, 0.04], [0.24, 0.026]], BC, [0, 0, 1], Q.lathe, bzExp, 0.1)
-  // socket floor: glows with the power-up (the reactor covers its centre; when the reactor powers down for the
-  // hero-select beat the heart still glows)
-  lathe(M.glow, [[0.242, 0.028], [0.0, 0.03]], BC, [0, 0, 1], Q.lathe, [0, 0, 0.0], 0.1)
-  // bezel bolts (chrome), between the gold rim steps
-  for (let k = 0; k < 10; k++) {
-    const a = (k / 10) * Math.PI * 2 + Math.PI / 10
-    const cx = BC[0] + Math.cos(a) * 0.31
-    const cy = BC[1] + Math.sin(a) * 0.31
-    lathe(M.chrome, [[0.0, 0.088], [0.012, 0.086], [0.016, 0.078], [0.016, 0.06]], [cx, cy, BC[2]], [0, 0, 1], 12, bzExp, 0.1, { smoothAll: false })
+  // ---- reactor socket: a deep machined well, so the reactor sits recessed (and can tilt a little without poking
+  //      out): gold outer collar with a chamfered crown · groove with copper coil teeth · chrome lip running down
+  //      into the well · glowing floor ring (the reactor's own back plate covers the centre)
+  const BC = [REACTOR[0], REACTOR[1], REACTOR[2]]
+  const AX = [0, 0, 1]
+  const z0 = [0, 0, 0]
+  lathe(M.gold, [[0.378, -0.13], [0.378, 0.05], [0.374, 0.066], [0.364, 0.072]], BC, AX, Q.lathe, z0, 0.1)
+  lathe(M.gun, [[0.362, 0.072], [0.36, 0.088], [0.35, 0.1], [0.334, 0.106], [0.31, 0.104], [0.298, 0.094]], BC, AX, Q.lathe, z0, 0.1)
+  lathe(M.gun, [[0.298, 0.094], [0.294, 0.072], [0.256, 0.072], [0.252, 0.08]], BC, AX, Q.lathe, z0, 0.1)
+  lathe(M.chrome, [[0.252, 0.08], [0.246, 0.096], [0.232, 0.099], [0.222, 0.09], [0.216, 0.066], [0.216, -0.112]], BC, AX, Q.lathe, z0, 0.1)
+  lathe(M.glow, [[0.217, -0.108], [0.168, -0.108]], BC, AX, Q.lathe, z0, 0.1)
+  lathe(M.under, [[0.168, -0.11], [0.0, -0.11]], BC, AX, Q.lathe >> 1, z0, 0.1)
+  for (let k = 0; k < 12; k++) {
+    const a0 = (k / 12) * Math.PI * 2 + 0.05
+    lathe(M.gold, [[0.259, 0.072], [0.259, 0.086], [0.264, 0.09], [0.286, 0.09], [0.291, 0.086], [0.291, 0.072]], BC, AX, 6, z0, 0.1, { a0, a1: a0 + 0.36 })
+  }
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + Math.PI / 8
+    const c = [BC[0] + Math.cos(a) * 0.338, BC[1] + Math.sin(a) * 0.338, BC[2]]
+    lathe(M.chrome, [[0.0, 0.116], [0.008, 0.115], [0.011, 0.109], [0.011, 0.094]], c, AX, 12, z0, 0.1)
   }
 
-  // ---- gorget: stacked rings around the neck (+ dark neck seal with a glow ring)
+  // ---- gorget: a hollow armoured collar (no head): a gunmetal base ring on the yoke, a thin gold band, a flared
+  //      upper ring with a rolled lip, and inside it a dished neck seal with a glow ring
   const NC = [0, 0, ZA - 0.03]
   const nA = norm([0, 1, -0.06])
-  const gor = [
-    ['gold', [[0.29, 0.76], [0.296, 0.8], [0.29, 0.84], [0.268, 0.86], [0.255, 0.86]], 0.0],
-    ['gun', [[0.268, 0.865], [0.274, 0.89], [0.272, 0.93], [0.258, 0.95], [0.21, 0.955], [0.205, 0.94]], 0.05],
-  ]
-  gor.forEach(([mat, prof, k]) => lathe(M[mat], prof, NC, nA, Q.lathe, [0, 0.3 + k, -0.04], 0.3 + k, { smoothAll: false }))
-  lathe(M.under, [[0.205, 0.94], [0.17, 0.935], [0.0, 0.93]], NC, nA, Q.lathe, [0, 0.4, -0.04], 0.4)
-  lathe(M.glow, [[0.18, 0.942], [0.168, 0.947], [0.152, 0.942]], NC, nA, Q.lathe, [0, 0.4, -0.04], 0.4)
+  const gExp = [0, 0.3, -0.04]
+  lathe(M.gun, [[GR + 0.004, 0.62], [GR + 0.008, 0.7], [GR + 0.012, 0.77], [GR + 0.008, 0.82], [GR - 0.006, 0.836], [GR - 0.014, 0.838]], NC, nA, Q.lathe, gExp, 0.3, { smoothAll: false })
+  lathe(M.gold, [[GR - 0.012, 0.838], [GR - 0.004, 0.846], [GR - 0.006, 0.862], [GR - 0.016, 0.867]], NC, nA, Q.lathe, gExp, 0.3)
+  lathe(M.gun, [[GR - 0.02, 0.867], [GR - 0.022, 0.892], [GR - 0.012, 0.922], [GR - 0.018, 0.94], [GR - 0.036, 0.946], [GR - 0.054, 0.94], [GR - 0.06, 0.926]], NC, nA, Q.lathe, [0, 0.34, -0.04], 0.35)
+  lathe(M.under, [[GR - 0.06, 0.926], [0.19, 0.919], [0.0, 0.915]], NC, nA, Q.lathe, [0, 0.38, -0.04], 0.4)
+  lathe(M.glow, [[0.214, 0.927], [0.204, 0.931], [0.19, 0.924]], NC, nA, Q.lathe, [0, 0.38, -0.04], 0.4)
 
-  // ---- pauldrons: a dominant dome cap over two tucked lames (gold edge band), tilted out over the arm
-  const PC = [0.875, 0.6, ZA]
-  const PA = [0.6, 1, 0.03]
-  const PB = [1, -0.6, 0]
+  // ---- pauldrons: a lobster-tail stack of curved bands that runs from the yoke over the top of the shoulder and down
+  //      its outside — a broad red cap band, a thin gold trim, then three red lames, each tucked under the one above.
+  //      Every band crosses the shoulder front-to-back (a free-standing shell on an ellipsoid round the shoulder ball,
+  //      axis tilted towards the neck) and bows outwards in the middle; the cap carries a raised spine.
+  const PA = norm([-0.3, 1, 0.0])
+  const PB = [1, 0.3, 0]
+  const PS = [0.86, 0.94, 1.12] // lower than a sphere, a touch flatter on the outside, longer front-to-back
+  const PC = [DELT[0], DELT[1] + 0.03, DELT[2]]
+  const EGG = 0.1
   const lames = [
-    { mat: 'red', r: 0.336, b0: 0.0, b1: 1.1, polar: true, T: 0.04, cham: [0.05, 0.016], crown: 0.012, crownW: 0.22, bevel: 0.02 },
-    { mat: 'gold', r: 0.31, b0: 1.02, b1: 1.38, a: 2.0, T: 0.03, cham: [0.03, 0.008], crown: 0.0, bevel: 0.014 },
+    { mat: 'red', r: 0.338, b0: 0.26, b1: 1.62, a: 2.2, T: 0.026, cham: [0.04, 0.012], crown: 0.02, crownW: 0.24, bevel: 0.017, spine: 0.036, rc: 0.12 },
+    { mat: 'gold', r: 0.326, b0: 1.55, b1: 1.7, a: 2.05, T: 0.014, cham: [0.0, 0.0], crown: 0.0, bevel: 0.007, rc: 0.03 },
+    { mat: 'red', r: 0.316, b0: 1.64, b1: 1.95, a: 2.12, T: 0.02, cham: [0.024, 0.007], crown: 0.008, crownW: 0.12, bevel: 0.012, rc: 0.06 },
+    { mat: 'red', r: 0.304, b0: 1.9, b1: 2.2, a: 2.18, T: 0.02, cham: [0.024, 0.007], crown: 0.008, crownW: 0.12, bevel: 0.012, rc: 0.07 },
   ]
+  const caps = []
   for (const s of sides) {
     lames.forEach((L, k) => {
-      const ch = sphereChart({ C: PC, A: PA, B1: PB, r: L.r, polar: L.polar, betaRef: (L.b0 + L.b1) / 2, mirror: !!s, flare: 0.016 })
-      let ol
-      if (L.polar) {
-        ol = []
-        for (let q = 0; q < 56; q++) {
-          const a = (q / 56) * Math.PI * 2
-          ol.push([Math.cos(a) * L.b1 * L.r, Math.sin(a) * L.b1 * L.r, 0])
-        }
-      } else {
+      const ch = sphereChart({ C: PC, A: PA, B1: PB, r: L.r, polar: false, betaRef: (L.b0 + L.b1) / 2, mirror: !!s, flare: 0.006, scale: PS })
+      // the cap's spine: a soft ridge along the great circle α = 0, from the collar out over the shoulder
+      const F0 = ch.frame
+      const spine = L.spine
+        ? (P) => L.spine * Math.pow(Math.max(0, 1 - Math.abs((P[0] - F0.c[0]) * F0.b2[0] + (P[1] - F0.c[1]) * F0.b2[1] + (P[2] - F0.c[2]) * F0.b2[2]) / 0.075), 1.8)
+        : null
+      const ol = []
+      {
         const sr = Math.sin((L.b0 + L.b1) / 2)
-        const u = L.a * L.r * sr
-        ol = [
-          [-u, L.b0 * L.r, 0.04],
-          [u, L.b0 * L.r, 0.04],
-          [u * 0.94, L.b1 * L.r, 0.06],
-          [-u * 0.94, L.b1 * L.r, 0.06],
-        ]
+        const n = 16
+        // top edge (α: −a → a), then the bottom edge back; both bow outwards (larger β) in the middle
+        for (let q = 0; q <= n; q++) {
+          const al = -L.a + (2 * L.a * q) / n
+          ol.push([al * L.r * sr, L.b0 * L.r * (1 + EGG * Math.cos(al)), q === 0 || q === n ? L.rc : 0])
+        }
+        for (let q = n; q >= 0; q--) {
+          const al = -L.a + (2 * L.a * q) / n
+          ol.push([al * L.r * sr * 0.97, L.b1 * L.r * (1 + EGG * Math.cos(al)), q === 0 || q === n ? L.rc : 0])
+        }
       }
       const sx = s ? -1 : 1
-      const dirOut = norm([sx * (0.8 + k * 0.08), 0.62 - k * 0.22, 0.12])
-      const amt = 0.36 + k * 0.07
-      plate(M[L.mat], ch, ol, { T: L.T, h0: 0.008, bevel: L.bevel, cham: L.cham, crown: L.crown, crownW: L.crownW ?? 0.1, wall: 0.024, gap: 0, back: true, exp: [dirOut[0] * amt, dirOut[1] * amt, dirOut[2] * amt], phase: 0.2 + k * 0.1 }, Q)
+      const dirOut = norm([sx * (0.8 + k * 0.12), 0.6 - k * 0.3, 0.14])
+      const amt = 0.34 + k * 0.08
+      const res = plate(M[L.mat], ch, ol, { T: L.T, h0: 0.008, bevel: L.bevel, cham: L.cham, crown: L.crown, crownW: L.crownW ?? 0.1, wall: 0.024, gap: 0, radius: 0.02, back: true, extra: spine, exp: [dirOut[0] * amt, dirOut[1] * amt, dirOut[2] * amt], phase: 0.2 + k * 0.1 }, Q)
+      if (k === 0) caps.push(res)
     })
-  }
-
-  // ---- upper arms: bicep plate (red) with a gold band, sealed cut (gunmetal ring, dark seal, glow ring)
-  for (const s of sides) {
-    const ch = armChart(!!s)
-    const { A, D } = ch.frame
-    const sx = s ? -1 : 1
-    const out = norm([sx * 0.9, -0.35, 0.1])
-    const U = 2.45 * ARM_R
-    plate(M.red, ch, [[-U, 0.1, 0.03], [U, 0.1, 0.03], [U * 0.98, 0.555, 0.03], [-U * 0.98, 0.555, 0.03]], { T: 0.034, cham: [0.03, 0.01], crown: 0.008, crownW: 0.1, radius: 0.03, exp: [out[0] * 0.5, out[1] * 0.5, out[2] * 0.5], phase: 0.6 }, Q)
-    plate(M.gold, ch, [[-U * 0.96, 0.562, 0.012], [U * 0.96, 0.562, 0.012], [U * 0.96, 0.612, 0.012], [-U * 0.96, 0.612, 0.012]], { T: 0.03, cham: [0, 0], crown: 0.0, bevel: 0.01, radius: 0.012, exp: [out[0] * 0.56, out[1] * 0.56, out[2] * 0.56], phase: 0.65 }, Q)
-    const C = [A[0], A[1], A[2]]
-    const ex = [out[0] * 0.56, out[1] * 0.56, out[2] * 0.56]
-    lathe(M.gun, [[R_CUT + 0.03, ARM_CUT - 0.014], [R_CUT + 0.036, ARM_CUT + 0.004], [R_CUT + 0.022, ARM_CUT + 0.018], [R_CUT - 0.01, ARM_CUT + 0.018]], C, D, Q.lathe, ex, 0.65)
-    lathe(M.under, [[R_CUT - 0.01, ARM_CUT + 0.018], [R_CUT - 0.02, ARM_CUT + 0.01], [0, ARM_CUT + 0.008]], C, D, Q.lathe, ex, 0.65)
-    lathe(M.glow, [[R_CUT - 0.035, ARM_CUT + 0.0125], [R_CUT - 0.052, ARM_CUT + 0.0135]], C, D, Q.lathe, ex, 0.65)
-  }
-
-  // ---- vents on the upper pecs: dark frame + glowing slit
-  for (const s of sides) {
-    const ch = cyl[s]
-    const sx = s ? -1 : 1
-    for (let k = 0; k < 2; k++) {
-      const y = 0.655 - k * 0.045
-      const x0 = 0.385 + k * 0.02
-      const fr = [F(sx * x0, y), F(sx * (x0 + 0.13), y - 0.04), F(sx * (x0 + 0.13), y - 0.068), F(sx * x0, y - 0.028)].map((p) => ({ ...p, r: 0.008 }))
-      const c = centre3(fr)
-      const e = radial(c, 0.4)
-      plate(M.gun, ch, fr, { lift: 0.05, T: 0.014, h0: 0.004, bevel: 0.005, cham: [0, 0], crown: 0, gap: 0, wall: 0.03, radius: 0.008, seam: 0, exp: e }, Q)
-      const sl = [F(sx * (x0 + 0.012), y - 0.008), F(sx * (x0 + 0.118), y - 0.041), F(sx * (x0 + 0.118), y - 0.058), F(sx * (x0 + 0.012), y - 0.024)].map((p) => ({ ...p, r: 0.004 }))
-      plate(M.glow, ch, sl, { lift: 0.06, T: 0.006, h0: 0.003, bevel: 0.003, cham: [0, 0], crown: 0, gap: 0, wall: 0.008, radius: 0.004, seam: 0, exp: e }, Q)
-    }
   }
 
   // ---- under-suit
   buildBody(M.under, Q)
 
-  // ---- HUD anchors (rest positions + their explode offsets), on four different parts, top → bottom
-  const anc = (name, P, e) => (anchors[name] = { p: P, e })
+  // ---- HUD anchors (rest positions + their explode offsets) on four different plates of the viewer's left (−x) side,
+  //      where the read-outs are. Ordered top → bottom and outside → in (pauldron cap · pectoral · side rib ·
+  //      abdominal segment) so the four leader lines fan out without crossing. (The names are the HUD's slot keys.)
+  // (w = the plate's breathing phase, so the anchor follows the plate exactly while the exploded view breathes)
+  const anc = (name, P, plt) => (anchors[name] = { p: P, e: plt.exp, w: plt.phase })
   {
-    const ga = (-35 * Math.PI) / 180
-    anc('forehead', [Math.sin(ga) * 0.285, 0.905, ZA - 0.03 + Math.cos(ga) * 0.285], [0, 0.35, -0.04])
-    const pa = [-PC[0] - 0.1, PC[1] + 0.36, PC[2] + 0.1]
-    const dOut = norm([-0.8, 0.6, 0.12])
-    anc('crown', pa, [dOut[0] * 0.36, dOut[1] * 0.36, dOut[2] * 0.36])
-    const pp = frontPoint(-0.42, 0.3)
-    anc('cheek', [pp[0], pp[1], pp[2] + 0.06], radial(pp, 0.34))
-    const pb = frontPoint(-0.18, -0.62)
-    anc('ear', [pb[0], pb[1], pb[2] + 0.06], radial(pb, 0.4, 0.4))
+    anc('forehead', caps[1].centroid, caps[1])
+    const pp = frontPoint(-0.42, 0.44) // on the face of the left pec (its centroid sits round the side)
+    anc('crown', [pp[0], pp[1], pp[2] + 0.07], pecs[1])
+    const pr = frontPoint(-0.5, 0.0) // on the face of the left upper side-rib plate
+    anc('cheek', [pr[0], pr[1], pr[2] + 0.05], ribs[1])
+    const ab = abs[2 * 2 + 1] // row 2, −x half
+    anc('ear', ab.centroid, ab)
   }
 
   // design units → stage units
@@ -1070,10 +1021,10 @@ export function buildChest(quality = 'high') {
       top: (m.top || []).map((r) => r.slice()),
     }
   }
-  return { meshes: out, anchors, socketZ: zs * S }
+  return { meshes: out, anchors }
 }
 
-function cylP(u, v) {
+export function cylP(u, v) {
   const P = [0, 0, 0]
   const N = [0, 0, 0]
   cylChart(false).at(u, v, P, N)

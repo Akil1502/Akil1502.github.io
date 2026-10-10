@@ -24,28 +24,28 @@ import chestMeta from './chest/meta'
 //  b 4–5  HERO SELECT reactor powers down, the helmet withdraws to the background and watches the hovered card
 //  b 5    NEXT        armour retracts one last time
 const DESK_H = [
-  { b: 0, x: 2.05, y: 0.55, z: 0, s: 1.45, ry: -0.42, rx: 0.05 },
-  { b: 0.62, x: 2.2, y: 0.6, z: 0.35, s: 1.45, ry: -0.3, rx: 0.02 },
+  { b: 0, x: 1.86, y: -0.14, z: 0, s: 1.4, ry: -0.42, rx: 0.05 },
+  { b: 0.62, x: 1.96, y: -0.14, z: 0.35, s: 1.38, ry: -0.3, rx: 0.02 },
   { b: 1.0, x: 2.4, y: 0.24, z: -0.25, s: 1.22, ry: -0.62, rx: 0.08 },
   { b: 1.6, x: 2.4, y: 0.24, z: -0.25, s: 1.22, ry: 0.45, rx: 0.08 },
   { b: 1.95, x: 2.45, y: 0.8, z: -0.9, s: 1.2, ry: 0.0, rx: 0.0 },
   { b: 2.3, x: 2.45, y: 1.3, z: -1.6, s: 1.1, ry: 0.0, rx: -0.1 },
-  { b: 2.72, x: -2.4, y: 0.55, z: 0, s: 1.45, ry: 0.42, rx: 0.05 },
-  { b: 3.62, x: -2.3, y: 0.6, z: 0.3, s: 1.45, ry: 0.32, rx: 0.02 },
-  { b: 4.0, x: 3.4, y: 1.45, z: -2.2, s: 1.2, ry: -0.35, rx: 0.1 },
-  { b: 4.6, x: 3.4, y: 1.45, z: -2.2, s: 1.2, ry: -0.35, rx: 0.1 },
+  { b: 2.72, x: -2.4, y: 0.3, z: 0, s: 1.45, ry: 0.42, rx: 0.05 },
+  { b: 3.62, x: -2.3, y: 0.32, z: 0.3, s: 1.45, ry: 0.32, rx: 0.02 },
+  { b: 4.0, x: 3.4, y: 1.72, z: -2.2, s: 1.16, ry: -0.35, rx: 0.1 },
+  { b: 4.6, x: 3.4, y: 1.72, z: -2.2, s: 1.16, ry: -0.35, rx: 0.1 },
   { b: 5.0, x: 0, y: 0.5, z: -3.5, s: 1.0, ry: 0, rx: 0 },
 ]
 // portrait / phones: the copy sits in the lower half of the screen, so the stage lives in the upper half
 const PORT_H = [
-  { b: 0, x: 0, y: 1.6, z: -0.4, s: 0.82, ry: -0.18, rx: 0.06 },
-  { b: 0.62, x: 0, y: 1.65, z: 0, s: 0.84, ry: -0.06, rx: 0.03 },
+  { b: 0, x: 0, y: 1.55, z: -0.4, s: 0.88, ry: -0.18, rx: 0.06 },
+  { b: 0.62, x: 0, y: 1.6, z: 0, s: 0.9, ry: -0.06, rx: 0.03 },
   { b: 1.0, x: 0, y: 1.75, z: -0.6, s: 0.64, ry: -0.55, rx: 0.08 },
   { b: 1.6, x: 0, y: 1.75, z: -0.6, s: 0.64, ry: 0.55, rx: 0.08 },
   { b: 1.95, x: 0, y: 2.6, z: -1.4, s: 0.58, ry: 0, rx: 0 },
   { b: 2.3, x: 0, y: 3.0, z: -1.8, s: 0.55, ry: 0, rx: -0.1 },
-  { b: 2.72, x: 0, y: 1.78, z: -0.4, s: 0.74, ry: 0.18, rx: 0.06 },
-  { b: 3.62, x: 0, y: 1.82, z: 0, s: 0.76, ry: 0.06, rx: 0.03 },
+  { b: 2.72, x: 0, y: 1.74, z: -0.4, s: 0.8, ry: 0.18, rx: 0.06 },
+  { b: 3.62, x: 0, y: 1.78, z: 0, s: 0.82, ry: 0.06, rx: 0.03 },
   { b: 4.0, x: 0, y: 2.75, z: -3.4, s: 0.7, ry: 0, rx: 0.1 },
   { b: 4.6, x: 0, y: 2.75, z: -3.4, s: 0.7, ry: 0, rx: 0.1 },
   { b: 5.0, x: 0, y: 1.0, z: -4, s: 0.6, ry: 0, rx: 0 },
@@ -334,7 +334,8 @@ export default function HomeScene({ tier = 'high', ready }) {
       r.position.set(v.att.x + (R.x - v.att.x) * wR, v.att.y + (R.y - v.att.y) * wR, v.att.z + (R.z - v.att.z) * wR)
       // scaled down instead of hidden: its point light must stay in the scene (constant light count)
       r.scale.setScalar(Math.max(0.001, (sA + (R.s - sA) * wR) * rVis))
-      r.rotation.set(-0.12 * (1 - wR) + scroll.mouse.y * 0.1, s.ry * 0.4 * (1 - wR) + scroll.mouse.x * 0.15, 0)
+      // seated in the chest socket it turns exactly with the armour; centre stage it only follows the pointer
+      r.rotation.set(s.rx * (1 - wR) + scroll.mouse.y * 0.1 * wR, s.ry * (1 - wR) + scroll.mouse.x * 0.15 * wR, 0)
       // nanite source = reactor centre in helmet space
       r.getWorldPosition(v.rWorld)
       if (helmInner.current) {

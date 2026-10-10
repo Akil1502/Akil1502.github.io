@@ -16,10 +16,10 @@ import './home.css'
 // Four pinned beats over one 3D stage (see HomeScene), then the hero-select teaser and the next mission.
 // Every number below comes from resume.js (profile.*); nothing is invented.
 const STATS = [
-  { value: profile.yearsExperience, pad: 2, suffix: '', unit: 'YRS', label: 'Years of experience', note: 'Enterprise web apps in production', plate: 'FACEPLATE' },
-  { value: profile.livePortals, pad: 2, suffix: '', unit: 'LIVE', label: 'Live enterprise portals', note: 'CRM · ESS · MIS · Hangfire · Knitting', plate: 'CROWN' },
-  { value: profile.employeesServed, pad: 0, suffix: '+', unit: 'USERS', label: 'Employees served', note: 'Attendance, payroll & invoicing', plate: 'CHEEK' },
-  { value: profile.entities, pad: 2, suffix: '', unit: 'ORGS', label: 'Company entities', note: 'Bannari Mills · Shiva Mills · Automobiles', plate: 'EAR' },
+  { value: profile.yearsExperience, pad: 2, suffix: '', unit: 'YRS', label: 'Years of experience', note: 'Enterprise web apps in production', plate: 'PAULDRON' },
+  { value: profile.livePortals, pad: 2, suffix: '', unit: 'LIVE', label: 'Live enterprise portals', note: 'CRM · ESS · MIS · Hangfire · Knitting', plate: 'PECTORAL' },
+  { value: profile.employeesServed, pad: 0, suffix: '+', unit: 'USERS', label: 'Employees served', note: 'Attendance, payroll & invoicing', plate: 'SIDE RIB' },
+  { value: profile.entities, pad: 2, suffix: '', unit: 'ORGS', label: 'Company entities', note: 'Bannari Mills · Shiva Mills · Automobiles', plate: 'ABDOMINAL' },
 ]
 const SYSTEMS = [...skills.core.map((s) => s.name), ...skills.ai.map((s) => s.name)]
 const OTHERS = PAGES.filter((p) => p.id !== 'home')
@@ -195,7 +195,7 @@ export default function HomePage({ ready }) {
     }
   }, [])
 
-  // ---- hero cards: 3D tilt + the helmet turns to look at the hovered card ----
+  // ---- hero cards: 3D tilt + the armour turns to look at the hovered card ----
   const onCardMove = (e) => {
     const c = e.currentTarget
     const r = c.getBoundingClientRect()

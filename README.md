@@ -9,7 +9,7 @@ Each page is a fan tribute to one hero of the team, with original procedural 3D 
 
 | Page | Hero | Centrepiece |
 | --- | --- | --- |
-| `/` Home | Iron Man | Faceted collectible-style helmet with nanite suit-up, reactor, HUD diagnostics |
+| `/` Home | Iron Man | Armoured chest built around the arc reactor, nanite suit-up, HUD diagnostics |
 | `/about` About | Captain America | Ricocheting vibranium-style shield, personnel file |
 | `/skills` Skills | Thor | War hammer, storm, lightning striking runestones |
 | `/experience` Experience | Black Widow | Hourglass emblem, laser grid, decrypting mission files |
